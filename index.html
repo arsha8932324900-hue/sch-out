@@ -218,7 +218,7 @@ function msgFor(a, t, who) {
 }
 
 // ---------- چرخه‌ی به‌روزرسانی ----------
-let lastSig = "";
+let lastSig = "", booted = false;
 async function refresh(manual) {
   if (busy) return;
   busy = true; $("#rf").classList.add("spin");
@@ -230,11 +230,11 @@ async function refresh(manual) {
     if (e.message === "BADPW") { PW = ""; LS.del("pw"); D = null; P = null; lastErr = ""; showLock("رمز داده اشتباه است"); }
     else lastErr = e.message;
   }
-  busy = false; $("#rf").classList.remove("spin");
+  busy = false; booted = true; $("#rf").classList.remove("spin");
   if (!cfg().repo) showSetup(); else if (!D && lastErr && !LS.get("blob", "") && $("#ov").hidden) showSetup(lastErr);
   const sig = (LS.get("etag", "") || "") + "|" + lastErr + "|" + (D ? 1 : 0);
   if (manual || sig !== lastSig) { lastSig = sig; render(); }
-  if (manual && !lastErr) toast("✔ به‌روز شد");
+  if (manual) toast(lastErr ? "⚠ " + lastErr : "✔ به‌روز شد");
 }
 function toast(m) {
   let t = $("#toast");
@@ -299,8 +299,26 @@ function viewStudent(id) {
   return h;
 }
 let lastRoute = "";
+function emptyState() {
+  const hasBlob = !!LS.get("blob", "");
+  const why = lastErr || (hasBlob && !PW ? "برای دیدن اطلاعات، رمز داده را وارد کنید." : "فایل داده هنوز دریافت نشده است. مطمئن شوید مدیر مدرسه «همگام‌سازی» را زده است.");
+  return `<div class="card" style="text-align:center"><div style="font-size:42px">📭</div><h3 style="display:block;background:none">اطلاعاتی نمایش داده نشد</h3><p class="mut">${esc(why)}</p>
+  <div class="bar" style="justify-content:center">${hasBlob && !PW ? '<button class="btn" data-a="lock">وارد کردن رمز</button>' : '<button class="btn" data-a="retry">تلاش دوباره</button>'}<button class="btn g" data-a="cfg">تنظیمات اتصال</button></div></div>`;
+}
 function render() {
-  if (!P) { $("#app").className = ""; $("#app").innerHTML = '<div class="sk"></div><div class="sk"></div><div class="sk"></div>'; $("#nav").hidden = true; return; }
+  try { render_(); } catch (e) {
+    console.error(e);
+    $("#nav").hidden = true; $("#app").className = "";
+    $("#app").innerHTML = `<div class="card" style="text-align:center"><div style="font-size:42px">🛠️</div><h3 style="display:block;background:none">خطا در نمایش اطلاعات</h3><p class="mut" dir="ltr">${esc(e && e.message)}</p><div class="bar" style="justify-content:center"><button class="btn" data-a="retry">تلاش دوباره</button><button class="btn g" data-a="cfg">تنظیمات اتصال</button></div></div>`;
+  }
+}
+function render_() {
+  if (!P) {
+    $("#nav").hidden = true; $("#app").className = "";
+    $("#app").innerHTML = !booted || busy ? '<div class="sk"></div><div class="sk"></div><div class="sk"></div>' : emptyState();
+    if (booted && !busy && LS.get("blob", "") && !PW && $("#ov").hidden) showLock();
+    return;
+  }
   $("#nav").hidden = false;
   const h = location.hash.replace(/^#/, "") || "/", seg = h.split("/");
   const t = seg[1] === "rank" ? "rank" : seg[1] === "students" || seg[1] === "s" ? "students" : "home";
@@ -357,7 +375,7 @@ function showSetup(err) {
     LS.del("blob"); LS.del("etag"); D = P = null;
     $("#ov").hidden = true; if (PW) refresh(); else { showLock(); refresh(); }
   };
-  if ($("#s_x")) $("#s_x").onclick = () => { $("#ov").hidden = true; };
+  if ($("#s_x")) $("#s_x").onclick = () => { $("#ov").hidden = true; if (!D) { if (LS.get("blob", "") && !PW) showLock(); else render(); } };
   if ($("#s_out")) $("#s_out").onclick = () => { ["pw", "blob", "etag", "tok"].forEach(LS.del); PW = TOK = ""; D = P = null; $("#ov").hidden = true; render(); showLock(); };
 }
 
@@ -365,7 +383,11 @@ function showSetup(err) {
 $("#rf").onclick = () => refresh(true);
 $("#gear").onclick = () => showSetup();
 $("#app").addEventListener("input", e => { if (e.target.id === "q") { QF.q = e.target.value; $("#lst").innerHTML = listHTML(); } });
-$("#app").addEventListener("click", e => { const c = e.target.closest(".chip"); if (c) { QF.cls = c.dataset.c; render(); } });
+$("#app").addEventListener("click", e => {
+  const c = e.target.closest(".chip"); if (c) { QF.cls = c.dataset.c; render(); return; }
+  const a = e.target.closest("[data-a]"); if (!a) return;
+  if (a.dataset.a === "retry") refresh(true); else if (a.dataset.a === "cfg") showSetup(); else if (a.dataset.a === "lock") showLock();
+});
 window.addEventListener("hashchange", () => P && render());
 document.addEventListener("visibilitychange", () => { if (!document.hidden && D) refresh(); });
 setInterval(() => { if (!document.hidden && D) refresh(); }, Math.max(1, +cfg().refreshMinutes || 5) * 60000);
