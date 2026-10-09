@@ -1,5 +1,5 @@
 // سرویس‌ورکر: فقط فایل‌های خود اپ کش می‌شوند (نه درخواست‌های GitHub)، تا اپ آفلاین هم باز شود.
-const V = "school-app-v2";
+const V = "school-app-v3";
 const SHELL = ["./", "index.html", "config.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "fonts/Vazirmatn.woff2"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => {
